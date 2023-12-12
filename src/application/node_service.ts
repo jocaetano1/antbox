@@ -282,7 +282,7 @@ export class NodeService {
 			return left(nodeOrErr.value);
 		}
 
-		return right(nodeOrErr.value);
+		return right(NodeFactory.compose(nodeOrErr.value));
 	}
 
 	private getFromRepository(
@@ -308,7 +308,8 @@ export class NodeService {
 
 		const nodes = await this.context.repository
 			.filter([["parent", "==", parentOrErr.value.uuid]], Number.MAX_VALUE, 1)
-			.then((result) => result.nodes);
+			.then((result) => result.nodes)
+			.then((nodes) => nodes.map((n) => NodeFactory.compose(n)));
 
 		if (parent === Node.ROOT_FOLDER_UUID) {
 			return right([FolderNode.SYSTEM_FOLDER, ...nodes]);
