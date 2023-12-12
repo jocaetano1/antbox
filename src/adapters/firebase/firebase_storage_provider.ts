@@ -8,8 +8,9 @@ import {
 	uploadBytes,
 	UploadMetadata,
 	UploadResult,
-} from "npm:@firebase/storage";
-import { initializeApp } from "npm:@firebase/app";
+} from "npm:firebase/storage";
+
+import { initializeApp } from "npm:firebase/app";
 import { StorageProvider, WriteFileOpts } from "../../domain/providers/storage_provider.ts";
 import { AntboxError, UnknownError } from "../../shared/antbox_error.ts";
 import { Either, left, right } from "../../shared/either.ts";
@@ -27,9 +28,9 @@ export default function buildFirebaseStorageProvider(
 			const [l1, l2] = url;
 			return ref(storage, `${l1}/${l2}/${url}`);
 		},
-		deleteObject: deleteObject,
-		uploadBytes: uploadBytes,
-		getDownloadURL: getDownloadURL,
+		deleteObject,
+		uploadBytes,
+		getDownloadURL,
 	};
 
 	return Promise.resolve(right(new FirebaseStorageProvider(gateway)));
@@ -41,7 +42,8 @@ export interface FirebaseGateway {
 	deleteObject: (ref: StorageReference) => Promise<void>;
 	uploadBytes: (
 		ref: StorageReference,
-		data: File,
+		// deno-lint-ignore no-explicit-any
+		data: any, // ArrayBuffer | Uint8Array | File,
 		metadata?: UploadMetadata,
 	) => Promise<UploadResult>;
 	getDownloadURL: (ref: StorageReference) => Promise<string>;
@@ -64,7 +66,7 @@ export class FirebaseStorageProvider implements StorageProvider {
 			>;
 	}
 
-	write(
+	async write(
 		uuid: string,
 		file: File,
 		opts?: WriteFileOpts | undefined,
@@ -76,13 +78,27 @@ export class FirebaseStorageProvider implements StorageProvider {
 			customMetadata: opts ? opts : {},
 		};
 
-		return this.#gateway.uploadBytes(fileRef, file, metadata)
-			.then(() => right)
-			.catch((e: Error) => left(new UnknownError(e.message))) as Promise<
-				Either<AntboxError, void>
-			>;
-	}
+		// // Example Uint8Array
+		// const uint8Array = new Uint8Array([72, 101, 108, 108, 111]); // 'Hello'
 
+		// // Create a Buffer from the Uint8Array
+		// const buffer = new Buffer(uint8Array);
+
+		// // Create a Blob-like object
+		// const blob = new Blob([buffer], { type: "application/octet-stream" });
+
+		const b = await file.arrayBuffer();
+		// const a = new Uint8Array(b);
+
+		return this.#gateway.uploadBytes(fileRef, b, metadata)
+			.then(() => {
+				return right<AntboxError, void>(undefined);
+			})
+			.catch((e: Error) => {
+				const aErr = new UnknownError(e.message);
+				return left<AntboxError, void>(aErr);
+			});
+	}
 	read(uuid: string): Promise<Either<AntboxError, File>> {
 		const fileRef = this.#gateway.ref(this.#gateway.storage, uuid);
 
