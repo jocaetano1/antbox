@@ -16,7 +16,12 @@ startServer({
 			name: "firebase",
 			storage: [
 				"firebase/firebase_storage_provider.ts",
-				"gs://pessoal-407411.appspot.com",
+				"AIzaSyA35H9gdAgo85RtgJ89ISAAZfoalE0iVM",
+				"pessoal-407411",
+				"pessoal-407411.appspot.com",
+				"1019035304478",
+				"1:1019035304478:web:5d758ce1c56cdd3575640f",
+				"G-30V9CJW3WC",
 			],
 			repository: [
 				"flat_file/flat_file_node_repository.ts",

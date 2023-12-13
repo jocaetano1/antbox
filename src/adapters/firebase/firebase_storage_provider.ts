@@ -18,9 +18,9 @@ import { Event } from "../../shared/event.ts";
 import { EventHandler } from "../../shared/event_handler.ts";
 
 export default function buildFirebaseStorageProvider(
-	storageBucket: string,
+	firebaseConfig: FirebaseConfig,
 ): Promise<Either<AntboxError, StorageProvider>> {
-	const app = initializeApp({ storageBucket });
+	const app = initializeApp(firebaseConfig);
 	const storage = getStorage(app);
 	const gateway: FirebaseGateway = {
 		storage,
@@ -36,19 +36,6 @@ export default function buildFirebaseStorageProvider(
 	return Promise.resolve(right(new FirebaseStorageProvider(gateway)));
 }
 
-export interface FirebaseGateway {
-	storage: FirebaseStorage;
-	ref: (storage: FirebaseStorage, url: string) => StorageReference;
-	deleteObject: (ref: StorageReference) => Promise<void>;
-	uploadBytes: (
-		ref: StorageReference,
-		// deno-lint-ignore no-explicit-any
-		data: any, // ArrayBuffer | Uint8Array | File,
-		metadata?: UploadMetadata,
-	) => Promise<UploadResult>;
-	getDownloadURL: (ref: StorageReference) => Promise<string>;
-}
-
 export class FirebaseStorageProvider implements StorageProvider {
 	readonly #gateway: FirebaseGateway;
 
@@ -60,13 +47,11 @@ export class FirebaseStorageProvider implements StorageProvider {
 		const fileRef = this.#gateway.ref(this.#gateway.storage, uuid);
 
 		return this.#gateway.deleteObject(fileRef)
-			.then(() => right)
-			.catch((e: Error) => left(new UnknownError(e.message))) as Promise<
-				Either<AntboxError, void>
-			>;
+			.then(() => right<AntboxError, void>(undefined))
+			.catch((e: Error) => left<AntboxError, void>(new UnknownError(e.message)));
 	}
 
-	async write(
+	write(
 		uuid: string,
 		file: File,
 		opts?: WriteFileOpts | undefined,
@@ -78,42 +63,48 @@ export class FirebaseStorageProvider implements StorageProvider {
 			customMetadata: opts ? opts : {},
 		};
 
-		// // Example Uint8Array
-		// const uint8Array = new Uint8Array([72, 101, 108, 108, 111]); // 'Hello'
-
-		// // Create a Buffer from the Uint8Array
-		// const buffer = new Buffer(uint8Array);
-
-		// // Create a Blob-like object
-		// const blob = new Blob([buffer], { type: "application/octet-stream" });
-
-		const b = await file.arrayBuffer();
-		// const a = new Uint8Array(b);
-
-		return this.#gateway.uploadBytes(fileRef, b, metadata)
+		return this.#gateway.uploadBytes(fileRef, file, metadata)
 			.then(() => {
 				return right<AntboxError, void>(undefined);
 			})
 			.catch((e: Error) => {
-				const aErr = new UnknownError(e.message);
-				return left<AntboxError, void>(aErr);
+				return left<AntboxError, void>(new UnknownError(e.message));
 			});
 	}
+
 	read(uuid: string): Promise<Either<AntboxError, File>> {
 		const fileRef = this.#gateway.ref(this.#gateway.storage, uuid);
 
 		return this.#gateway.getDownloadURL(fileRef).then((url) => {
 			return Deno.readFile(url)
 				.then((fileContent) => new File([fileContent], uuid))
-				.then(right)
-				.catch((e: Error) => left(new UnknownError(e.message))) as Promise<
-					Either<AntboxError, File>
-				>;
-		}).catch((e: Error) => left(new UnknownError(e.message))) as Promise<
-			Either<AntboxError, File>
-		>;
+				.then((file) => right<AntboxError, File>(file))
+				.catch((e: Error) => left<AntboxError, File>(new UnknownError(e.message)));
+		}).catch((e: Error) => left<AntboxError, File>(new UnknownError(e.message)));
 	}
 
-	startListeners(_bus: (eventId: string, handler: EventHandler<Event>) => void): void {
-	}
+	startListeners(_bus: (eventId: string, handler: EventHandler<Event>) => void): void {}
+}
+
+export interface FirebaseGateway {
+	storage: FirebaseStorage;
+	ref: (storage: FirebaseStorage, url: string) => StorageReference;
+	deleteObject: (ref: StorageReference) => Promise<void>;
+	uploadBytes: (
+		ref: StorageReference,
+		// deno-lint-ignore no-explicit-any
+		data: any, // Blob | ArrayBuffer | Uint8Array | File
+		metadata?: UploadMetadata,
+	) => Promise<UploadResult>;
+	getDownloadURL: (ref: StorageReference) => Promise<string>;
+}
+
+interface FirebaseConfig {
+	apiKey: string;
+	authDomain: string;
+	projectId: string;
+	storageBucket: string;
+	messagingSenderId: string;
+	appId: string;
+	measurementId: string;
 }
